@@ -11,7 +11,6 @@ from config_provincias import PROVINCIAS_BOUNDING_BOXES
 
 API_URL = "https://api.openchargemap.io/v3/poi"
 
-# ----------------- Utils -----------------
 def slug(s: str) -> str:
     return (
         s.replace(" ", "_")
@@ -38,7 +37,6 @@ def load_api_key() -> str:
         raise RuntimeError("No se encontró OCM_API_KEY en .env")
     return api_key
 
-# ----------------- Parsing precio -----------------
 def usagecost_to_eur_per_kwh(text: str, treat_free_as_zero: bool = False) -> Tuple[Any, str]:
     if text is None:
         return None, "empty"
@@ -76,7 +74,6 @@ def band_from_power_kw(power_kw, level_id=None):
     except Exception:
         return None
 
-# ----------------- HTTP -----------------
 def make_session() -> requests.Session:
     s = requests.Session()
     adapter = requests.adapters.HTTPAdapter(max_retries=3)
@@ -104,7 +101,6 @@ def fetch_bbox(bbox: Dict[str, float], api_key: str, maxresults=10000, sleep_s=1
     time.sleep(sleep_s)
     return r.json()
 
-# ----------------- Normalización filas + agregados -----------------
 def normalize_rows(pois_json: List[Dict], prov_name: str, month_label: str, treat_free_as_zero=False) -> List[Dict]:
     rows = []
     qc_rows = []
@@ -199,7 +195,6 @@ def combine_year(year: int):
     print(f"[OK] Agregado anual -> {out.name}")
     return annual
 
-# ----------------- CLI -----------------
 def main():
     parser = argparse.ArgumentParser(description="Ingesta OCM por provincias y agregado mensual/anual")
     parser.add_argument("--month", type=str, help="YYYY-MM. Solo ese mes.")
