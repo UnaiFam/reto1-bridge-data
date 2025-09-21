@@ -1,7 +1,3 @@
-# config_provincias.py
-# Genera y expone PROVINCIAS_BOUNDING_BOXES = {provincia: {north, south, west, east}}
-# Cachea en ./data/processed/provincias_bbox.json
-
 import json
 from pathlib import Path
 

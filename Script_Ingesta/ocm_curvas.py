@@ -9,7 +9,6 @@ def load_monthlies_for_year(year: int) -> pd.DataFrame:
     parts = [pd.read_csv(fp) for fp in files]
     df = pd.concat(parts, ignore_index=True)
 
-    # detectar dimensión territorial
     if "provincia" in df.columns:
         level_col = "provincia"
     elif "ccaa" in df.columns:

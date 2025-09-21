@@ -1,21 +1,3 @@
-# build_ev_proxy.py
-"""
-Construye un histórico PROXY de precios EV (€/kWh) por CCAA y banda (AC/DC)
-a partir del snapshot del mes base + un índice PVPC mensual.
-
-Entrada:
-- data/processed/ocm_agg_YYYY-MM.csv   (baseline del mes base)
-- (opcional) data/processed/pvpc_YYYY.csv con columnas: month, pvpc_eur_kWh
-
-Salida:
-- data/processed/ocm_proxy_YYYY_wide.csv   (month, ccaa, AC, DC)
-- (opcional) data/processed/ocm_proxy_YYYY_long.csv   (month, ccaa, band, eur_kWh)
-
-Uso:
-  python build_ev_proxy.py --year 2025 --base-month 2025-09 --metric median
-  python build_ev_proxy.py --year 2025 --base-month 2025-09 --metric mean --pvpc-file data/processed/pvpc_2025.csv
-"""
-
 from __future__ import annotations
 import argparse
 from pathlib import Path

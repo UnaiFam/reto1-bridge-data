@@ -1,6 +1,6 @@
 import os, re, requests, argparse
 from dotenv import load_dotenv
-from config import CCAA_BOUNDING_BOXES  # tu config.py con bounding boxes
+from config import CCAA_BOUNDING_BOXES  
 
 API_URL = "https://api.openchargemap.io/v3/poi"
 
