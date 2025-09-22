@@ -1,7 +1,2 @@
 .venv
 .env
-
-*.joblib
-
-__pycache__/
-*.py[cod]
