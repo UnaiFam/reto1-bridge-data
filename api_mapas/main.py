@@ -62,6 +62,40 @@ async def leer_ev():
     return data_ev
 
 
+async def leer_gas():
+    """ lee ev pasa a df limpio"""
+    client = MongoClient(DB_URL)
+    db = client["Prueba1"]
+    collection = db["Combustible"]
+    docs=collection.find({})
+    data_gas = pd.DataFrame(docs)
+    
+
+    estacion_df = pd.json_normalize(data_gas["estacion"])
+    data_gas = data_gas.drop(columns=["estacion"]).join(estacion_df.add_prefix("estacion."))
+    df_exploded = data_gas.explode("lineas").reset_index(drop=True)
+    # Normaliza la columna "lineas" (dict → columnas)
+    lineas_normalizadas = pd.json_normalize(df_exploded["lineas"])
+    # Une las nuevas columnas con el dataset original
+    data_gas = df_exploded.drop(columns=["lineas"]).join(lineas_normalizadas.add_prefix("lineas."))
+    data_gas["fechaEmision"]=pd.to_datetime(data_gas["fechaEmision"])
+    data_gas["horaEmision"]=pd.to_datetime(data_gas["horaEmision"], format="%H:%M:%S")
+    return data_gas
+
+async def leer_peaje():
+    """ lee ev pasa a df limpio"""
+    client = MongoClient(DB_URL)
+    db = client["Prueba1"]
+    collection = db["Peaje"]
+    docs=collection.find({})
+    data_peaje = pd.DataFrame(docs)
+    
+
+    localizacion_df = pd.json_normalize(data_peaje["localizacion"])
+    data_peaje = data_peaje.drop(columns=["localizacion"]).join(localizacion_df.add_prefix("localizacion."))
+
+    return data_peaje
+
 
 @app.get("/mapakwh")
 async def mapakwh():
