@@ -42,7 +42,7 @@ async def lifespan(app: FastAPI):
 
 
 async def leer_ev():
-
+    """ lee ev pasa a df limpio"""
     client = MongoClient(DB_URL)
     db = client["Prueba1"]
     collection = db["electrico"]
@@ -65,6 +65,7 @@ async def leer_ev():
 
 @app.get("/mapakwh")
 async def mapakwh():
+    """ devuelve la localizacion de donde meter el heatmap  kwh en formato json"""
     data_ev = await leer_ev()
     df_map = data_ev.groupby(['estacion.lat', 'estacion.lon'])['lineas.kwh'].mean().reset_index()
 
@@ -84,6 +85,8 @@ async def mapakwh():
 
 @app.get("/tickets")
 async def get_tickets():
+    """Devuelve en dictinario los tickects ev"""
+
     df = await leer_ev()
     return df.to_dict(orient="records")
 
