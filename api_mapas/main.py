@@ -10,21 +10,10 @@ import os
 """
 
 
-"""
-tictackontrack@gmail.com
-
-tlcTR4CK!.
-
-database user
-
-tictadmin
-
-password 
-
-tictacdmin
 
 
-"""
+
+
 load_dotenv()
 app = FastAPI(title="API de Tickets Eléctricos")
 
