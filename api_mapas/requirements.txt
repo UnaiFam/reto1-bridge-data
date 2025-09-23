@@ -38,7 +38,7 @@ Pygments==2.19.1
 pymongo==4.15.1
 python-dateutil==2.9.0.post0
 pytz==2025.2
-pywin32==310
+pywin32==310; platform_system=="Windows"
 pyzmq==27.0.0
 requests==2.32.5
 setuptools==78.1.1
@@ -56,3 +56,4 @@ wcwidth==0.2.13
 wheel==0.45.1
 xyzservices==2025.4.0
 uvicorn==0.36.0
+python-dotenv==1.1.1

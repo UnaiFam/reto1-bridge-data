@@ -3,6 +3,9 @@ import pandas as pd
 from motor.motor_asyncio import AsyncIOMotorClient
 from fastapi import FastAPI
 from pymongo import MongoClient
+from dotenv import load_dotenv
+import os
+
 """"python "API MAPAS"/main.py"
 """
 
@@ -22,12 +25,13 @@ tictacdmin
 
 
 """
-
+load_dotenv()
 app = FastAPI(title="API de Tickets Eléctricos")
 
-@app.on_event("startup")
+BASE_DATOS=os.getenv("DB_URL")
+
 async def startup_db_client():
-    app.mongodb_client = AsyncIOMotorClient("mongodb+srv://unaifam_db_user:4xcFf~_D3)qeR4C@cluster0.qdcfbed.mongodb.net/?retryWrites=true&w=majority&appName=Cluster0")
+    app.mongodb_client = AsyncIOMotorClient(BASE_DATOS)
     app.mongodb = app.mongodb_client["Prueba1"]
 
 # Cierre de conexión al apagar la app

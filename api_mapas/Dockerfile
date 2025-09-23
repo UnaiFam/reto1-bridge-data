@@ -1,0 +1,20 @@
+FROM python:3.12.11
+
+# Crear directorio de trabajo
+
+
+# Copiar dependencias
+COPY requirements.txt .
+
+# Instalar dependencias
+RUN pip install --no-cache-dir -r requirements.txt
+
+# Copiar el resto de la app
+COPY main.py .
+COPY .env .
+
+# Exponer puerto
+EXPOSE 8000
+
+# Arrancar servidor
+CMD ["uvicorn", "API_MAPAS:main", "--host", "0.0.0.0", "--port", "8000"]
