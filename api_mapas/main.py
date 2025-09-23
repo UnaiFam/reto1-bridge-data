@@ -96,7 +96,6 @@ if __name__ == "__main__":
         "main:app",       # archivo:instancia de FastAPI
         host="0.0.0.0",   # accesible desde otras máquinas
         port=8000,        # puerto de la API
-        reload=True       # recarga automática al cambiar código
-    )
+            )
 
 
