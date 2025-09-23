@@ -84,7 +84,7 @@ async def leer_gas():
 
 async def leer_peaje():
     """ lee ev pasa a df limpio"""
-    client = MongoClient("mongodb+srv://unaifam_db_user:4xcFf~_D3)qeR4C@cluster0.qdcfbed.mongodb.net/?retryWrites=true&w=majority")
+    client = MongoClient(DB_URL)
     db = client["Prueba1"]
     collection = db["Peaje"]
     docs=collection.find({})
