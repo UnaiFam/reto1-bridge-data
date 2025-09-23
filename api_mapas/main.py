@@ -3,57 +3,63 @@ import pandas as pd
 from motor.motor_asyncio import AsyncIOMotorClient
 from fastapi import FastAPI
 from pymongo import MongoClient
+import uvicorn
 from dotenv import load_dotenv
 import os
 
-""""python "API MAPAS"/main.py"
+from motor.motor_asyncio import AsyncIOMotorClient
+from contextlib import asynccontextmanager
+
+""""
+
+python main.py
+
+"
 """
 
 
-
-
-
-
 load_dotenv()
+
+DB_URL = os.getenv("DB_URL")
+
+
 app = FastAPI(title="API de Tickets Eléctricos")
 
-BASE_DATOS=os.getenv("DB_URL")
 
-async def startup_db_client():
-    app.mongodb_client = AsyncIOMotorClient(BASE_DATOS)
+@asynccontextmanager
+async def lifespan(app: FastAPI):
+    # Startup: create MongoDB client
+    app.mongodb_client = AsyncIOMotorClient(DB_URL)
     app.mongodb = app.mongodb_client["Prueba1"]
-
-# Cierre de conexión al apagar la app
-@app.on_event("shutdown")
-async def shutdown_db_client():
+    print("MongoDB connected")
+    
+    yield  # FastAPI runs here
+    
+    # Shutdown: close MongoDB client
     app.mongodb_client.close()
+    print("MongoDB connection closed")
 
 
 
 async def leer_ev():
-    collection = app.mongodb["electrico"]
-    cursor = collection.find({})
-    docs = await cursor.to_list(length=1000)
-    df = pd.DataFrame(docs)
 
-    # Normalizar 'estacion'
-    estacion_df = pd.json_normalize(df["estacion"])
-    df = df.drop(columns=["estacion"]).join(estacion_df.add_prefix("estacion."))
+    client = MongoClient(DB_URL)
+    db = client["Prueba1"]
+    collection = db["electrico"]
+    docs=collection.find({})
+    data_ev = pd.DataFrame(docs)
+    
 
-    # Explode 'lineas'
-    df = df.explode("lineas").reset_index(drop=True)
-    lineas_normalizadas = pd.json_normalize(df["lineas"])
-    df = df.drop(columns=["lineas"]).join(lineas_normalizadas.add_prefix("lineas."))
-
-    # Fechas
-    df["fechaEmision"] = pd.to_datetime(df["fechaEmision"])
-    df["horaEmision"] = pd.to_datetime(df["horaEmision"], format="%H:%M:%S")
-
-    return df
-
-
-
-
+    estacion_df = pd.json_normalize(data_ev["estacion"])
+    data_ev = data_ev.drop(columns=["estacion"]).join(estacion_df.add_prefix("estacion."))
+    df_exploded = data_ev.explode("lineas").reset_index(drop=True)
+    # Normaliza la columna "lineas" (dict → columnas)
+    lineas_normalizadas = pd.json_normalize(df_exploded["lineas"])
+    # Une las nuevas columnas con el dataset original
+    data_ev = df_exploded.drop(columns=["lineas"]).join(lineas_normalizadas.add_prefix("lineas."))
+    data_ev["fechaEmision"]=pd.to_datetime(data_ev["fechaEmision"])
+    data_ev["horaEmision"]=pd.to_datetime(data_ev["horaEmision"], format="%H:%M:%S")
+    return data_ev
 
 
 
@@ -71,7 +77,6 @@ async def mapakwh():
 
     # Añadir capa HeatMap
     
-
     return heat_data
 
 
