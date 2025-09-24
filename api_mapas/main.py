@@ -11,9 +11,11 @@ from motor.motor_asyncio import AsyncIOMotorClient
 from contextlib import asynccontextmanager
 
 """"
+decir  las palabras magicas:
 
 python main.py
 
+DENTRO DE LA CARPETA  en local para que funcione
 "
 """
 
@@ -23,11 +25,11 @@ load_dotenv()
 DB_URL = os.getenv("DB_URL")
 
 
-app = FastAPI(title="API de Tickets Eléctricos")
+app = FastAPI(title="API MAPAS/ESTADISTCA/KPI")
 
 
 @asynccontextmanager
-async def lifespan(app: FastAPI):
+async def lifespan(app: FastAPI): # lo de acerlo asincrono lo saque del ejemplo que tienen los de mongo db pero se supone que ahora lo quieren de esta forma. Tiene coña que que al final lo que haga sea de forma directa mas abajo
     # Startup: create MongoDB client
     app.mongodb_client = AsyncIOMotorClient(DB_URL)
     app.mongodb = app.mongodb_client["Prueba1"]
@@ -48,7 +50,10 @@ async def leer_ev():
     collection = db["electrico"]
     docs=collection.find({})
     data_ev = pd.DataFrame(docs)
-    
+
+
+
+
 
     estacion_df = pd.json_normalize(data_ev["estacion"])
     data_ev = data_ev.drop(columns=["estacion"]).join(estacion_df.add_prefix("estacion."))
@@ -117,13 +122,8 @@ async def mapakwh():
 
 
 
-@app.get("/tickets")
-async def get_tickets():
-    """Devuelve en dictinario los tickects ev"""
 
-    df = await leer_ev()
-    return df.to_dict(orient="records")
-
+# lo de abajo no tengo claro lo que hace creo que expone el puerto 8000
 if __name__ == "__main__":
     import uvicorn
     uvicorn.run(
