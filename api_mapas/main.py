@@ -119,8 +119,55 @@ async def mapakwh():
     
     return heat_data
 
+@app.get("/mapagas")
+async def mapagas():
+    """ devuelve la localizacion de donde meter el heatmap  precionunitario medio en formato json"""
+    data_gas =  leer_gas()
+    df_map = data_gas.groupby(['estacion.lat', 'estacion.lon'])['lineas.precioUnitario'].mean().reset_index()
 
 
+    # Crear mapa centrado (ejemplo: centro de España)
+    
+
+    # Preparar datos para el HeatMap (lat, lon, peso)
+    heat_data = [[row['estacion.lat'], row['estacion.lon'], row['lineas.precioUnitario']] for index, row in df_map.iterrows()]
+
+    # Añadir capa HeatMap
+    
+    return heat_data
+
+def mapagas_conc(combustible=None):
+    """
+    Devuelve la localización y el precio unitario medio por estación,
+    filtrado opcionalmente por tipo de combustible.
+    Formato: [[lat, lon, precio_medio], ...]
+    """
+    # Leer datos
+    data_gas = leer_gas()
+
+    # Filtrar si se pasa combustible
+    if combustible is not None:
+        if isinstance(combustible, list):
+            # Varios combustibles
+            data_gas = data_gas[data_gas["lineas.producto"].isin(combustible)]
+        else:
+            # Un solo combustible
+            data_gas = data_gas[data_gas["lineas.producto"] == combustible]
+
+    # Agrupar por coordenadas y calcular precio medio
+    df_map = (
+        data_gas.groupby(['estacion.lat', 'estacion.lon'])['lineas.precioUnitario']
+        .mean()
+        .reset_index()
+    )
+
+    # Preparar datos para el HeatMap
+    heat_data = [
+        [row['estacion.lat'], row['estacion.lon'], row['lineas.precioUnitario']]
+        for _, row in df_map.iterrows()
+    ]
+
+    return heat_data
 
 
 # lo de abajo no tengo claro lo que hace creo que expone el puerto 8000
