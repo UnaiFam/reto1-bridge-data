@@ -1,0 +1,12 @@
+services:
+  api-mapas:
+    build: ./api_mapas
+    container_name: api-mapas
+    ports:
+      - "6000:6000"
+    networks:
+      - backend
+
+networks:
+  backend:
+    driver: bridge
