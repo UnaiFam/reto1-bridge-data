@@ -14,8 +14,8 @@ COPY main.py .
 COPY .env .
 
 # Exponer puerto
-EXPOSE 8000
+EXPOSE 6000
 
 # Arrancar servidor
-#CMD ["uvicorn", "main:app", "--host", "0.0.0.0", "--port", "6000"]
+#CMD ["uvicorn", "main:app", "--host", "0.0.0.0", "--port", "8000"]
 CMD ["python", "main.py"]
