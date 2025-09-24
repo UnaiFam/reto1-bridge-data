@@ -41,10 +41,12 @@ async def lifespan(app: FastAPI): # lo de acerlo asincrono lo saque del ejemplo 
     app.mongodb_client.close()
     print("MongoDB connection closed")
 
-
+@app.get("/")
+def root():
+    return "API en funcionamiento, /docs, /mapakwh, /mapagas, /mapagas_concreto"
 
 async def leer_ev():
-    """ lee ev pasa a df limpio"""
+    """Lee la coleccion electricos lo pasa a un df limpio"""
     client = MongoClient(DB_URL)
     db = client["Prueba1"]
     collection = db["electrico"]
@@ -68,7 +70,7 @@ async def leer_ev():
 
 
 async def leer_gas():
-    """ lee ev pasa a df limpio"""
+    """Lee la coleccion de gasolina lo pasa a un df limpio"""
     client = MongoClient(DB_URL)
     db = client["Prueba1"]
     collection = db["Combustible"]
@@ -88,7 +90,7 @@ async def leer_gas():
     return data_gas
 
 async def leer_peaje():
-    """ lee ev pasa a df limpio"""
+    """Lee la coleccion de eajeslo pasa a un df limpio"""
     client = MongoClient(DB_URL)
     db = client["Prueba1"]
     collection = db["Peaje"]
@@ -104,7 +106,9 @@ async def leer_peaje():
 
 @app.get("/mapakwh")
 async def mapakwh():
-    """ devuelve la localizacion de donde meter el heatmap  kwh en formato json"""
+    """Devuelve la localizacion de donde meter el heatmap kwh medio en formato json
+    Formato: [[lat, lon, precio_medio], ...]
+    """
     data_ev = await leer_ev()
     df_map = data_ev.groupby(['estacion.lat', 'estacion.lon'])['lineas.kwh'].mean().reset_index()
 
@@ -121,7 +125,8 @@ async def mapakwh():
 
 @app.get("/mapagas")
 async def mapagas():
-    """ devuelve la localizacion de donde meter el heatmap  precionunitario medio en formato json"""
+    """Devuelve la localizacion de donde meter el heatmap precio de combustible medio en formato json
+    Formato: [[lat, lon, precio_medio], ...]"""
     data_gas =  await leer_gas()
     df_map = data_gas.groupby(['estacion.lat', 'estacion.lon'])['lineas.precioUnitario'].mean().reset_index()
 
@@ -177,7 +182,7 @@ if __name__ == "__main__":
     uvicorn.run(
         "main:app",       # archivo:instancia de FastAPI
         host="0.0.0.0",   # accesible desde otras máquinas
-        port=8000,        # puerto de la API
+        port=6000,        # puerto de la API
             )
 
 
