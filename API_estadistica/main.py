@@ -4,21 +4,23 @@ from fastapi.middleware.cors import CORSMiddleware
 from pymongo import MongoClient
 import pandas as pd
 import numpy as np
-import os, re, json, ast
+import os, re, json, ast, traceback
 from datetime import datetime, timedelta
 from dotenv import load_dotenv
+from pathlib import Path
 
 # ==============================
-# Cargar .env y configurar Mongo
+# Cargar .env (del mismo dir que main.py) y configurar Mongo
 # ==============================
-load_dotenv()
+load_dotenv(dotenv_path=Path(__file__).with_name(".env"))
 
-MONGO_URI   = os.getenv("DB_URL")
-DB_NAME     = os.getenv("DB_NAME", "Prueba1")
-# ¡OJO! En Atlas tu colección era "Electricos" (mayúscula). Por defecto la ponemos así:
-COL_FUEL    = os.getenv("COL_FUEL", "Combustible")
-COL_EV      = os.getenv("COL_EV", "Electricos")
-COL_TOLL    = os.getenv("COL_TOLL", "Peaje")
+MONGO_URI = os.getenv("DB_URL")
+DB_NAME   = os.getenv("DB_NAME", "Prueba1")
+
+# ⚠️ Nombres de colecciones EXACTOS en tu Atlas
+COL_FUEL  = os.getenv("COL_FUEL", "Combustible")
+COL_EV    = os.getenv("COL_EV",   "electrico")   # tu colección real
+COL_TOLL  = os.getenv("COL_TOLL", "Peaje")
 
 client = MongoClient(MONGO_URI)
 db = client[DB_NAME]
@@ -40,12 +42,21 @@ app.add_middleware(
 # ==============================
 # Utilidades
 # ==============================
+dias_map = {
+    "Monday":"Lunes","Tuesday":"Martes","Wednesday":"Miércoles","Thursday":"Jueves",
+    "Friday":"Viernes","Saturday":"Sábado","Sunday":"Domingo"
+}
+
 def _to_num_eur(x):
+    """Convierte strings tipo '5,50 €' -> 5.50"""
     if x is None or (isinstance(x, float) and pd.isna(x)): return np.nan
     s = str(x).strip().replace("€","").replace("\xa0"," ").strip()
-    s = re.sub(r"(?<=\d)[.,](?=\d{3}\b)", "", s)  # 1.234,56 -> 1234,56
+    # Elimina separadores de miles (punto o coma) cuando van entre dígitos y delante de 3 cifras
+    s = re.sub(r"(?<=\d)[.,](?=\d{3}\b)", "", s)
+    # Si hay 1 coma y 0 puntos -> es decimal español
     if s.count(",") == 1 and s.count(".") == 0:
-        s = s.replace(",", ".")  # 1234,56 -> 1234.56
+        s = s.replace(",", ".")
+    # Limpia cualquier otro char no numérico/./-
     s = re.sub(r"[^\d.\-]", "", s)
     try: return float(s)
     except: return np.nan
@@ -68,12 +79,7 @@ def parse_lineas(x):
             continue
     return []
 
-dias_map = {
-    "Monday":"Lunes","Tuesday":"Martes","Wednesday":"Miércoles","Thursday":"Jueves",
-    "Friday":"Viernes","Saturday":"Sábado","Sunday":"Domingo"
-}
-
-def _ser(d):
+def _ser(d: dict):
     out = {}
     for k, v in d.items():
         out[k] = v.to_dict(orient="records") if isinstance(v, pd.DataFrame) else v
@@ -212,7 +218,7 @@ def explode_ev_lines(df_ev: pd.DataFrame) -> pd.DataFrame:
     return df_lines
 
 # ==============================
-# KPIs
+# KPIs helpers
 # ==============================
 def _dias_mediana(series_dt):
     s = pd.to_datetime(pd.Series(series_dt).dropna()).sort_values().unique()
@@ -220,6 +226,7 @@ def _dias_mediana(series_dt):
     d = np.diff(s).astype("timedelta64[D]").astype(float)
     return float(np.median(d))
 
+# ---------- KPIs Combustible ----------
 def kpis_usuario_fuel(df_tickets: pd.DataFrame, df_lines: pd.DataFrame):
     if df_tickets.empty or df_lines.empty: return {}
     gasto_usuario_mes = df_tickets.groupby(["idUsuario","mes"])["total"].sum().reset_index()
@@ -280,6 +287,7 @@ def kpis_empresa_fuel(df_tickets: pd.DataFrame, df_lines: pd.DataFrame):
         "precio_global_emp": precio_global_emp,
     }
 
+# ---------- KPIs EV ----------
 def kpis_usuario_ev(df_tickets: pd.DataFrame, df_lines: pd.DataFrame):
     if df_tickets.empty or df_lines.empty: return {}
     gasto_usuario_mes = df_tickets.groupby(["idUsuario","mes"])["total"].sum().reset_index()
@@ -340,22 +348,17 @@ def kpis_empresa_ev(df_tickets: pd.DataFrame, df_lines: pd.DataFrame):
         "precio_global_emp": precio_global_emp,
     }
 
+# ---------- KPIs Peaje ----------
 def kpis_usuario_toll(df: pd.DataFrame):
     if df.empty: return {}
     dfu = df.copy()
     if "idTicket" not in dfu.columns:
-        if "referencia" in dfu.columns: dfu["idTicket"] = dfu["referencia"].astype(str)
+        if "referencia" in dfu.columns:
+            dfu["idTicket"] = dfu["referencia"].astype(str)
         else:
             dfu = dfu.reset_index().rename(columns={"index":"idTicket"})
             dfu["idTicket"] = dfu["idTicket"].astype(str)
-    if "importe" not in dfu.columns:
-        cand = [c for c in dfu.columns if any(p in c.lower() for p in ["importe","total","precio","coste","amount","valor","pago"])]
-        if cand:
-            ser = pd.to_numeric(dfu[cand[0]], errors="coerce")
-            ser = ser.where(ser.notna(), dfu[cand[0]].apply(_to_num_eur))
-            dfu["importe"] = ser
-        else:
-            dfu["importe"] = np.nan
+    # importe ya debe venir numérico desde el endpoint
     gasto_usuario_mes = dfu.groupby(["idUsuario","mes"])["importe"].sum().reset_index().rename(columns={"importe":"gasto_mes"})
     tickets_usuario_mes = dfu.groupby(["idUsuario","mes"])["idTicket"].nunique().reset_index().rename(columns={"idTicket":"tickets"})
     usuario_autopista_mes = (
@@ -385,7 +388,8 @@ def kpis_empresa_toll(df: pd.DataFrame):
     dfe = df.copy()
     dfe["empresa"] = dfe.get("empresaNombre", "EMPRESA_UNICA")
     if "idTicket" not in dfe.columns:
-        if "referencia" in dfe.columns: dfe["idTicket"] = dfe["referencia"].astype(str)
+        if "referencia" in dfe.columns:
+            dfe["idTicket"] = dfe["referencia"].astype(str)
         else:
             dfe = dfe.reset_index().rename(columns={"index":"idTicket"})
             dfe["idTicket"] = dfe["idTicket"].astype(str)
@@ -415,11 +419,10 @@ def kpis_empresa_toll(df: pd.DataFrame):
     }
 
 # ==============================
-# Endpoints
+# Endpoints de diagnóstico
 # ==============================
 @app.get("/health")
 def health():
-    """Comprobación rápida."""
     try:
         return {
             "db": DB_NAME,
@@ -434,7 +437,6 @@ def health():
 
 @app.get("/debug/peek")
 def debug_peek(n: int = 3):
-    """Echa un vistazo rápido a columnas y recuentos."""
     info = {}
     for name, coll in [(COL_FUEL, coll_fuel), (COL_EV, coll_ev), (COL_TOLL, coll_toll)]:
         df = load_df_mongo(coll, {})
@@ -445,6 +447,127 @@ def debug_peek(n: int = 3):
         }
     return info
 
+@app.get("/debug/config")
+def debug_config():
+    try:
+        return {
+            "DB_URL_loaded": bool(MONGO_URI),
+            "DB_NAME": DB_NAME,
+            "COLLECTIONS": {
+                "COL_FUEL": COL_FUEL,
+                "COL_EV":   COL_EV,
+                "COL_TOLL": COL_TOLL,
+            },
+            "counts": {
+                COL_FUEL: coll_fuel.estimated_document_count(),
+                COL_EV:   coll_ev.estimated_document_count(),
+                COL_TOLL: coll_toll.estimated_document_count(),
+            },
+        }
+    except Exception as e:
+        return {"error": repr(e)}
+
+@app.get("/debug/distinct")
+def debug_distinct(collection: str, field: str, limit: int = 50):
+    """
+    Ejemplos:
+      /debug/distinct?collection=Peaje&field=idUsuario
+      /debug/distinct?collection=Combustible&field=empresaNombre
+      /debug/distinct?collection=electrico&field=idUsuario
+    """
+    name_to_coll = {
+        COL_FUEL: coll_fuel, "Combustible": coll_fuel,
+        COL_EV:   coll_ev,   "electrico":   coll_ev, "Electricos": coll_ev,
+        COL_TOLL: coll_toll, "Peaje":       coll_toll,
+    }
+    coll = name_to_coll.get(collection)
+    if coll is None:
+        return {"error": f"Colección desconocida: {collection}. Usa {list(name_to_coll.keys())}"}
+    try:
+        vals = coll.distinct(field)
+        pipeline = [
+            {"$group": {"_id": f"${field}", "count": {"$sum": 1}}},
+            {"$sort": {"count": -1}},
+            {"$limit": limit},
+        ]
+        top = list(coll.aggregate(pipeline))
+        return {
+            "collection": collection,
+            "field": field,
+            "distinct_count": len(vals),
+            "sample_values": vals[:min(limit, 20)],
+            "top_counts": top,
+        }
+    except Exception as e:
+        return {"error": repr(e)}
+
+@app.get("/debug/peaje_sample")
+def debug_peaje_sample(n: int = 5):
+    """Mira columnas y primeras filas de la colección Peaje (sin filtros)."""
+    df = load_df_mongo(coll_toll, {})
+    return {
+        "docs": len(df),
+        "cols": list(df.columns),
+        "head": df.head(n).to_dict(orient="records"),
+    }
+
+@app.get("/debug/peaje_after")
+def debug_peaje_after(
+    start_date: str|None = None,
+    end_date: str|None = None,
+    empresa: str|None = None,
+    idUsuario: str|None = None,
+    n: int = 5
+):
+    """Muestra cómo queda el DF de Peaje después de normalizar (mismas reglas que el endpoint)."""
+    filt = _build_filter_fechas_toll(start_date, end_date)
+    if empresa:   filt["empresaNombre"] = empresa
+    if idUsuario: filt["idUsuario"] = idUsuario
+
+    df = load_df_mongo(coll_toll, filt)
+    if df.empty:
+        return {"df_empty": True, "filtro": filt}
+
+    # Normaliza mínimas
+    for col, default in [
+        ("idUsuario",    "DESCONOCIDO"),
+        ("empresaNombre","EMPRESA_UNICA"),
+        ("autopista",    "SIN_AUTOPISTA"),
+        ("formaPago",    "DESCONOCIDO"),
+        ("fechaHora",    pd.NaT),
+    ]:
+        if col not in df.columns:
+            df[col] = default
+
+    # Importe numérico (siempre convertir)
+    cand_imp = [c for c in df.columns if any(p in c.lower() for p in ["importe","total","precio","coste","amount","valor","pago"])]
+    if cand_imp:
+        col = cand_imp[0]
+        imp_series = df[col]
+        num = pd.to_numeric(imp_series, errors="coerce")
+        if num.isna().any():
+            parsed = imp_series.apply(_to_num_eur)
+            num = num.where(num.notna(), parsed)
+        df["importe"] = num
+    else:
+        df["importe"] = np.nan
+
+    df = add_time_cols_toll(df)
+    return {
+        "filtro": filt,
+        "cols": list(df.columns),
+        "nulls_por_col": df.isna().sum().to_dict(),
+        "head": df.head(n).to_dict(orient="records"),
+        "importe_all_nan": bool(df["importe"].isna().all()),
+        "fechaHora_all_nat": bool(pd.to_datetime(df["fechaHora"], errors="coerce").isna().all()),
+        "mes_unique_sample": df["mes"].dropna().unique().tolist()[:10],
+        "idUsuario_sample": df["idUsuario"].dropna().unique().tolist()[:10],
+        "empresaNombre_sample": df["empresaNombre"].dropna().unique().tolist()[:10],
+    }
+
+# ==============================
+# Endpoints KPIs
+# ==============================
 @app.get("/kpis/combustible")
 def ep_kpis_combustible(
     start_date: str|None = Query(None, description="YYYY-MM-DD (fechaEmision)"),
@@ -505,30 +628,64 @@ def ep_kpis_peaje(
     idUsuario:  str|None = Query(None),
 ):
     try:
+        # Filtro fechas
         filt = _build_filter_fechas_toll(start_date, end_date)
         if empresa:   filt["empresaNombre"] = empresa
         if idUsuario: filt["idUsuario"] = idUsuario
 
+        # Carga
         df = load_df_mongo(coll_toll, filt)
-        if df.empty: return {"usuario": {}, "empresa": {}}
+        if df.empty:
+            return {"usuario": {}, "empresa": {}}
 
-        if "importe" not in df.columns:
-            cand_imp = [c for c in df.columns if any(p in c.lower() for p in ["importe","total","precio","coste","amount","valor","pago"])]
-            if cand_imp:
-                ser = pd.to_numeric(df[cand_imp[0]], errors="coerce")
-                ser = ser.where(ser.notna(), df[cand_imp[0]].apply(_to_num_eur))
-                df["importe"] = ser
-            else:
-                df["importe"] = np.nan
+        # Normaliza columnas mínimas
+        for col, default in [
+            ("idUsuario",    "DESCONOCIDO"),
+            ("empresaNombre","EMPRESA_UNICA"),
+            ("autopista",    "SIN_AUTOPISTA"),
+            ("formaPago",    "DESCONOCIDO"),
+            ("fechaHora",    pd.NaT),
+        ]:
+            if col not in df.columns:
+                df[col] = default
 
+        # Importe numérico (SIEMPRE convertir, exista o no)
+        cand_imp = [c for c in df.columns if any(p in c.lower() for p in ["importe","total","precio","coste","amount","valor","pago"])]
+        if cand_imp:
+            col = cand_imp[0]
+            imp_series = df[col]
+            num = pd.to_numeric(imp_series, errors="coerce")
+            if num.isna().any():
+                parsed = imp_series.apply(_to_num_eur)
+                num = num.where(num.notna(), parsed)
+            df["importe"] = num
+        else:
+            df["importe"] = np.nan
+
+        # Tiempo
         df = add_time_cols_toll(df)
 
-        return {"usuario": _ser(kpis_usuario_toll(df)),
-                "empresa": _ser(kpis_empresa_toll(df))}
+        # Si sigue vacío (todo NaN), devolvemos vacío
+        if df["importe"].isna().all():
+            return {"usuario": {}, "empresa": {}}
+
+        # KPIs
+        usuario = kpis_usuario_toll(df)
+        empresa_kpi = kpis_empresa_toll(df)
+
+        return {"usuario": _ser(usuario) if usuario else {}, "empresa": _ser(empresa_kpi) if empresa_kpi else {}}
     except Exception as e:
-        print("ERROR /kpis/peaje:", repr(e))
-        return {"usuario": {}, "empresa": {}}
+        # Devuelve error para depurar si algo se escapa
+        return {"usuario": {}, "empresa": {}, "error": str(e), "traceback": traceback.format_exc()}
 
 @app.get("/")
 def root():
-    return {"message": "API KPIs lista. Endpoints: /kpis/combustible, /kpis/ev, /kpis/peaje", "health": "/health", "debug": "/debug/peek"}
+    return {
+        "message": "API KPIs lista. Endpoints: /kpis/combustible, /kpis/ev, /kpis/peaje",
+        "health": "/health",
+        "debug_config": "/debug/config",
+        "debug_peek": "/debug/peek",
+        "debug_distinct": "/debug/distinct?collection=Peaje&field=idUsuario",
+        "debug_peaje_sample": "/debug/peaje_sample",
+        "debug_peaje_after": "/debug/peaje_after"
+    }
