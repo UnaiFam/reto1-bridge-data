@@ -122,7 +122,7 @@ async def mapakwh():
 @app.get("/mapagas")
 async def mapagas():
     """ devuelve la localizacion de donde meter el heatmap  precionunitario medio en formato json"""
-    data_gas =  leer_gas()
+    data_gas =  await leer_gas()
     df_map = data_gas.groupby(['estacion.lat', 'estacion.lon'])['lineas.precioUnitario'].mean().reset_index()
 
 
@@ -136,14 +136,15 @@ async def mapagas():
     
     return heat_data
 
-def mapagas_conc(combustible=None):
+@app.get("/mapagas_concreto{combustible}")
+async def mapagas_concreto(combustible=None):
     """
     Devuelve la localización y el precio unitario medio por estación,
     filtrado opcionalmente por tipo de combustible.
     Formato: [[lat, lon, precio_medio], ...]
     """
     # Leer datos
-    data_gas = leer_gas()
+    data_gas = await leer_gas()
 
     # Filtrar si se pasa combustible
     if combustible is not None:
