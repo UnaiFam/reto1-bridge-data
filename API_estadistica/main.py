@@ -51,12 +51,9 @@ def _to_num_eur(x):
     """Convierte strings tipo '5,50 €' -> 5.50"""
     if x is None or (isinstance(x, float) and pd.isna(x)): return np.nan
     s = str(x).strip().replace("€","").replace("\xa0"," ").strip()
-    # Elimina separadores de miles (punto o coma) cuando van entre dígitos y delante de 3 cifras
     s = re.sub(r"(?<=\d)[.,](?=\d{3}\b)", "", s)
-    # Si hay 1 coma y 0 puntos -> es decimal español
     if s.count(",") == 1 and s.count(".") == 0:
         s = s.replace(",", ".")
-    # Limpia cualquier otro char no numérico/./-
     s = re.sub(r"[^\d.\-]", "", s)
     try: return float(s)
     except: return np.nan
