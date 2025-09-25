@@ -3,7 +3,7 @@ services:
     build: ./api_mapas
     container_name: api-mapas
     ports:
-      - "6000:6000"
+      - "9000:9000"
     networks:
       - backend
 

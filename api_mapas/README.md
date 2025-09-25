@@ -143,52 +143,51 @@ y revisar el localhost puerto 9000 /docs para ver la documetacion
 
 * **mapakwh:** 
 
-    *por detras*
+*por detras*
 
-    llama a una funcion que llama a la base de datos electico pasa a dataframe y se filtra con pandas
+llama a una funcion que llama a la base de datos electico pasa a dataframe y se filtra con pandas
 
-    *Por delante*
+*Por delante*
 
-    Devuelve para todos los medios
-    Formato:<code> [[lat, lon, precio_medio], ...] 
+Devuelve para todos los medios
+Formato:<code> [[lat, lon, precio_medio], ...] 
      
 * **mapagas:** 
 
-    *por detras*
+*por detras*
 
-    Actualmente la base de datos tiene
+Actualmente la base de datos tiene
 
 
-    llama a una funcion que llama a la base de datos electrico pasa a dataframe y se filtra con pandas
+llama a una funcion que llama a la base de datos electrico pasa a dataframe y se filtra con pandas
 
-    *Por delante*
+*Por delante*
 
-    Devuelve para todos los medios
-    Formato: <code>[[lat, lon, precio_medio], ...]
+Devuelve para todos los medios
+Formato: <code>[[lat, lon, precio_medio], ...]
 
 
 * **mapagas_concreto:** 
 
-    *por detras*
+*por detras*
 
-    Mismo que mapga gas pero puedes filtrar el combustible
+Mismo que mapga gas pero puedes filtrar el combustible
 
 
-    Llama a una funcion que llama a la base de datos electrico pasa a dataframe y se filtra con pandas
-    Actualmente la base de datos tiene 
-    <code>
-    ['Gasóleo A', 'Gasolina 95 E5', 'Gasolina 98 E5', 'Gasóleo Premium']
+Llama a una funcion que llama a la base de datos electrico pasa a dataframe y se filtra con pandas
+Actualmente la base de datos tiene 
+<code>
+['Gasóleo A', 'Gasolina 95 E5', 'Gasolina 98 E5', 'Gasóleo Premium']
 
-    Si se quiere filtrar mas de uno ej. Gasolina 98 E5 y Gasóleo Premium
+Si se quiere filtrar mas de uno ej. Gasolina 98 E5 y Gasóleo Premium
 
-    mirar en /docs pero seria algo asi:
-    <code>
-    /mapagas_concreto?combustible=Gasolina%2098%20E5&combustible=Gas%C3%B3leo%20Premium
-    pero en docs se ve mejor 
+mirar en /docs pero seria algo asi:
+<code>
+/mapagas_concreto?combustible=Gasolina%2098%20E5&combustible=Gas%C3%B3leo%20Premium
+pero en docs se ve mejor 
 
-    *Por delante*
+*Por delante*
 
-    Devuelve para todos los medios
-    Formato: <code>[[lat, lon, precio_medio], ...]
-
-    Ahora mismo no hay forma de diferenciar cual es cual
+Devuelve para todos los medios
+Formato: <code>[[lat, lon, precio_medio], ...]
+Ahora mismo no hay forma de diferenciar cual es cual
