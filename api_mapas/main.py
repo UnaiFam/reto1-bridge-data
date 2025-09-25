@@ -1,7 +1,8 @@
-
 import pandas as pd
 from motor.motor_asyncio import AsyncIOMotorClient
 from fastapi import FastAPI
+from typing import List, Optional
+from fastapi import Query
 from pymongo import MongoClient
 import uvicorn
 from dotenv import load_dotenv
@@ -64,8 +65,8 @@ async def leer_ev():
     lineas_normalizadas = pd.json_normalize(df_exploded["lineas"])
     # Une las nuevas columnas con el dataset original
     data_ev = df_exploded.drop(columns=["lineas"]).join(lineas_normalizadas.add_prefix("lineas."))
-    data_ev["fechaEmision"]=pd.to_datetime(data_ev["fechaEmision"])
-    data_ev["horaEmision"]=pd.to_datetime(data_ev["horaEmision"], format="%H:%M:%S")
+    data_ev['fechaHora'] = pd.to_datetime(data_ev['fechaEmision'].astype(str) + ' ' + data_ev['horaEmision'].astype(str))
+    data_ev.drop(['fechaEmision', 'horaEmision'], axis=1, inplace=True)
     return data_ev
 
 
@@ -85,8 +86,9 @@ async def leer_gas():
     lineas_normalizadas = pd.json_normalize(df_exploded["lineas"])
     # Une las nuevas columnas con el dataset original
     data_gas = df_exploded.drop(columns=["lineas"]).join(lineas_normalizadas.add_prefix("lineas."))
-    data_gas["fechaEmision"]=pd.to_datetime(data_gas["fechaEmision"])
-    data_gas["horaEmision"]=pd.to_datetime(data_gas["horaEmision"], format="%H:%M:%S")
+    data_gas['fechaHora'] = pd.to_datetime(data_gas['fechaEmision'].astype(str) + ' ' + data_gas['horaEmision'].astype(str))
+    data_gas.drop(['fechaEmision', 'horaEmision'], axis=1, inplace=True)
+
     return data_gas
 
 async def leer_peaje():
@@ -99,6 +101,8 @@ async def leer_peaje():
     
 
     localizacion_df = pd.json_normalize(data_peaje["localizacion"])
+    data_peaje["fechaHora"]=pd.to_datetime(data_peaje["fechaHora"])
+    data_peaje["importe"] = (data_peaje["importe"].astype(str)  .str.replace(",", ".", regex=False).str.replace("$", "", regex=False).str.replace("€", "", regex=False).astype(float)  )
     data_peaje = data_peaje.drop(columns=["localizacion"]).join(localizacion_df.add_prefix("localizacion."))
 
     return data_peaje
@@ -141,33 +145,28 @@ async def mapagas():
     
     return heat_data
 
-@app.get("/mapagas_concreto{combustible}")
-async def mapagas_concreto(combustible=None):
+
+
+
+@app.get("/mapagas_concreto")
+async def mapagas_concreto(combustible: Optional[List[str]] = Query(None)):
     """
     Devuelve la localización y el precio unitario medio por estación,
-    filtrado opcionalmente por tipo de combustible.
+    filtrado opcionalmente por tipo de combustible. Pero no hay diferencia entre coordenadas
+
     Formato: [[lat, lon, precio_medio], ...]
     """
-    # Leer datos
     data_gas = await leer_gas()
 
-    # Filtrar si se pasa combustible
-    if combustible is not None:
-        if isinstance(combustible, list):
-            # Varios combustibles
-            data_gas = data_gas[data_gas["lineas.producto"].isin(combustible)]
-        else:
-            # Un solo combustible
-            data_gas = data_gas[data_gas["lineas.producto"] == combustible]
+    if combustible:
+        data_gas = data_gas[data_gas["lineas.producto"].isin(combustible)]
 
-    # Agrupar por coordenadas y calcular precio medio
     df_map = (
         data_gas.groupby(['estacion.lat', 'estacion.lon'])['lineas.precioUnitario']
         .mean()
         .reset_index()
     )
 
-    # Preparar datos para el HeatMap
     heat_data = [
         [row['estacion.lat'], row['estacion.lon'], row['lineas.precioUnitario']]
         for _, row in df_map.iterrows()
@@ -176,13 +175,13 @@ async def mapagas_concreto(combustible=None):
     return heat_data
 
 
-# lo de abajo no tengo claro lo que hace creo que expone el puerto 8000
+# lo de abajo no tengo claro lo que hace creo que expone el puerto 9000
+# el puerto 6000 me da problemas, algo de que "No esta permitido" y "Que podria ser inseguro"
 if __name__ == "__main__":
     import uvicorn
     uvicorn.run(
-        "main:app",       # archivo:instancia de FastAPI
-        host="0.0.0.0",   # accesible desde otras máquinas
-        port=6000,        # puerto de la API
-            )
-
+        "main:app",
+        host="0.0.0.0",
+        port=9000   # recarga automática en desarrollo
+    )
 
