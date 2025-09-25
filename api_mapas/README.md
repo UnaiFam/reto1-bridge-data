@@ -2,37 +2,34 @@
 ----
 **API de Mapas**
 ----
-# **Información sobre el propyecto**
+# **Información sobre el proyecto/Como me conecto**
 
 Usa python 3.12.11 y se utilizo conda para gestion de librerias.
 
 Para mas informacion sobre librerias mirar <code>requirements.txt.
 
-A fecha de 25/09/2025 la API esta activa con  [render](https://reto1-bridge-data.onrender.com).
-
-Puede tardar en ponerse en marcha. Añadir  
-/docs al url veras la documentación 
+A fecha de 25/09/2025 la API esta activa con  [render](https://reto1-bridge-data.onrender.com). Puede tardar un rato en ponerse en marcha. 
+  
+/docs al url veras la documentación. 
 De todas formas esta en [este enlace](https://reto1-bridge-data.onrender.com/docs).
 
 Seguramente los mapas no se acaben implementando en el proyecto por lo que hasta que no se confirme implementación de estos no se generaran mapas mas mapas o mas complejos. 
-Seguramente el url acabe cambiando, ya que se esta metiendo en un docker compose. 
+Seguramente el url acabe cambiando, ya que se esta metiendo en un <code> docker compose.
 
 Tambien tended cuidado:
-Cada vez que algien sube a main la API se reinicia. Esto puede petar la API y gastar los  500 min grtis que tenemos. Asegurarse de que las funciones funciones en local antes de commit en main. No se si se reinicia por cada cambio solo por los cambios que le a la API.
+Cada vez que alguien sube a main la API se reinicia. Esto puede romper la API y gastar los  500 min gratis que tenemos. Asegurarse de que las funciones funciones en local antes de commit en main. No se si se reinicia por cada cambio solo por los cambios que le a la API.
 
 
-
-Se deberia de  borrar el .env y poner el .gitnore pero el docker funciona por este
-Pero estan integrados en compose
+Se deberia de  borrar el .env y poner el .gitignore pero por facilidad de uso en desarrollo es visible.
 
 <code>DB_URL=mongodb+srv://<dbuser>:<dbpassword>@cluster0.qdcfbed.mongodb.net/?retryWrites=true&w=majority&appName=Cluster0
-<code>DB_NAME=DBmae
+<code>DB_NAME=Db name
 
 DB_NAME no se usa. Se que no deberia de la url de la base de datos aqui pero quiero assegurarme que el que lo lea le funcione.
 
 
 
-## run local
+## Run en local
 decir  las palabras magicas:
 
 <code>python main.py
@@ -44,13 +41,20 @@ o ...
 <code>python api_mapas/main.py
 
 en directorio principal
-y revisar el localhost puerto 9000 /docs para ver la documetacion 
+y revisar el localhost puerto 9000 /docs para ver la documentacion. Si da error autoriza el localhost9000. 
 
-## Como funcionan 
+## Como funciona por detras/cosas para tener en cuenta en desarrollo de mas mapas 
 
-* Cuando se enciede lee la base de datos (codigo sacado del ejemplo de mongodb aunque aunque mas actualizado, aunue no se use bien del todo)
+Al iniciarse, se conecta y lee la base de datos (código basado en el ejemplo de MongoDB, aunque más actualizado y no del todo optimizado).
 
-* Tiene una funcion de leergas leerpeaje, leerev: lee base de datos y pasan a df limpio
+Esta comfigurado para que la base de datos este separado por 3 colecciones y cada función de lectura lee
+Existen funciones específicas para cada tipo de dato:
+
+* **leergas:** lee la base de datos de gasolineras y la transforma en un DataFrame limpio.
+
+* **leerpeaje:** lee la base de datos de peajes y la transforma en un DataFrame limpio.
+
+* **leerev:** lee la base de datos de cargadores eléctricos y la transforma en un DataFrame limpio
 
 
 *gasolina*
@@ -128,7 +132,7 @@ y revisar el localhost puerto 9000 /docs para ver la documetacion
 | 3   | autopista            | object |
 | 4   | fechaHora            | object |
 | 5   | categoriaVehiculo    | object |
-| 6   | importe              | object |
+| 6   | importe              | float  |
 | 7   | ivaIncluido          | object |
 | 8   | formaPago            | object |
 | 9   | referencia           | object |
@@ -140,12 +144,15 @@ y revisar el localhost puerto 9000 /docs para ver la documetacion
 | 15  | localizacion.entrada | object |
 | 16  | localizacion.salida  | object |
 
+## Funciones de mapas
 
 * **mapakwh:** 
 
 *por detras*
 
-llama a una funcion que llama a la base de datos electico pasa a dataframe y se filtra con pandas
+Llama a una funcion que llama a la base de datos electico pasa a dataframe y se filtra con pandas.
+Usa un bucle for.
+Actualmente no el endpoint no filtra info especifica, esperare a la confirmacion de la implementación de mapas.
 
 *Por delante*
 
@@ -156,10 +163,7 @@ Formato:<code> [[lat, lon, precio_medio], ...]
 
 *por detras*
 
-Actualmente la base de datos tiene
-
-
-llama a una funcion que llama a la base de datos electrico pasa a dataframe y se filtra con pandas
+Llama a una funcion que llama a la base de datos de vehiculos de combustible pasa a dataframe y se filtra con pandas. Estan todos juntos.
 
 *Por delante*
 
@@ -169,25 +173,27 @@ Formato: <code>[[lat, lon, precio_medio], ...]
 
 * **mapagas_concreto:** 
 
-*por detras*
+*por detrás*
 
-Mismo que mapga gas pero puedes filtrar el combustible
+Mismo que mapa gas pero puedes filtrar el combustible
 
 
-Llama a una funcion que llama a la base de datos electrico pasa a dataframe y se filtra con pandas
+Llama a una funcion que llama a la base de datos gas pasa a dataframe y se filtra con pandas
 Actualmente la base de datos tiene 
 <code>
 ['Gasóleo A', 'Gasolina 95 E5', 'Gasolina 98 E5', 'Gasóleo Premium']
 
-Si se quiere filtrar mas de uno ej. Gasolina 98 E5 y Gasóleo Premium
+Si se quieren filtrar varios (ej. Gasolina 98 E5 y Gasóleo Premium), se pasa como query param:
 
-mirar en /docs pero seria algo asi:
+
+
 <code>
 /mapagas_concreto?combustible=Gasolina%2098%20E5&combustible=Gas%C3%B3leo%20Premium
-pero en docs se ve mejor 
 
+Esta funcion es mejor revisar en <code>/docs
 *Por delante*
 
 Devuelve para todos los medios
 Formato: <code>[[lat, lon, precio_medio], ...]
-Ahora mismo no hay forma de diferenciar cual es cual
+
+Ahora mismo no hay forma de diferenciar cual es cual.

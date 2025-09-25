@@ -16,6 +16,10 @@ decir  las palabras magicas:
 
 python main.py
 
+o
+
+python api_mapas/main.py
+
 DENTRO DE LA CARPETA  en local para que funcione
 "
 """
@@ -26,7 +30,7 @@ load_dotenv()
 DB_URL = os.getenv("DB_URL")
 
 
-app = FastAPI(title="API MAPAS/ESTADISTCA/KPI")
+app = FastAPI(title="API MAPAS")
 
 
 @asynccontextmanager
@@ -47,15 +51,12 @@ def root():
     return "API en funcionamiento, /docs, /mapakwh, /mapagas, /mapagas_concreto"
 
 async def leer_ev():
-    """Lee la coleccion electricos lo pasa a un df limpio"""
+    """Lee la coleccion electricos lo pasa a un df limpio, revisar README.md"""
     client = MongoClient(DB_URL)
     db = client["Prueba1"]
     collection = db["electrico"]
     docs=collection.find({})
     data_ev = pd.DataFrame(docs)
-
-
-
 
 
     estacion_df = pd.json_normalize(data_ev["estacion"])
@@ -71,7 +72,7 @@ async def leer_ev():
 
 
 async def leer_gas():
-    """Lee la coleccion de gasolina lo pasa a un df limpio"""
+    """Lee la coleccion de gasolina lo pasa a un df limpio, revisar README.md"""
     client = MongoClient(DB_URL)
     db = client["Prueba1"]
     collection = db["Combustible"]
@@ -92,7 +93,7 @@ async def leer_gas():
     return data_gas
 
 async def leer_peaje():
-    """Lee la coleccion de eajeslo pasa a un df limpio"""
+    """Lee la coleccion de peajes y pasa a un df limpio, revisar README.md"""
     client = MongoClient(DB_URL)
     db = client["Prueba1"]
     collection = db["Peaje"]
@@ -129,7 +130,7 @@ async def mapakwh():
 
 @app.get("/mapagas")
 async def mapagas():
-    """Devuelve la localizacion de donde meter el heatmap precio de combustible medio en formato json
+    """Devuelve la localización de donde meter el heatmap precio de combustible medio (media de todos) en formato json
     Formato: [[lat, lon, precio_medio], ...]"""
     data_gas =  await leer_gas()
     df_map = data_gas.groupby(['estacion.lat', 'estacion.lon'])['lineas.precioUnitario'].mean().reset_index()
