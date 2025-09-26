@@ -18,9 +18,8 @@ load_dotenv(dotenv_path=Path(__file__).with_name(".env"))
 MONGO_URI = os.getenv("DB_URL")
 DB_NAME   = os.getenv("DB_NAME", "Prueba1")
 
-# ⚠️ Nombres de colecciones EXACTOS en tu Atlas
 COL_FUEL  = os.getenv("COL_FUEL", "Combustible")
-COL_EV    = os.getenv("COL_EV",   "electrico")   # tu colección real
+COL_EV    = os.getenv("COL_EV",   "electrico")   
 COL_TOLL  = os.getenv("COL_TOLL", "Peaje")
 
 client = MongoClient(MONGO_URI)
@@ -52,12 +51,9 @@ def _to_num_eur(x):
     """Convierte strings tipo '5,50 €' -> 5.50"""
     if x is None or (isinstance(x, float) and pd.isna(x)): return np.nan
     s = str(x).strip().replace("€","").replace("\xa0"," ").strip()
-    # Elimina separadores de miles (punto o coma) entre dígitos
     s = re.sub(r"(?<=\d)[.,](?=\d{3}\b)", "", s)
-    # Decimal español
     if s.count(",") == 1 and s.count(".") == 0:
         s = s.replace(",", ".")
-    # Limpia cualquier otro char
     s = re.sub(r"[^\d.\-]", "", s)
     try: return float(s)
     except: return np.nan
@@ -547,7 +543,6 @@ def debug_peaje_after(
     if df.empty:
         return {"df_empty": True, "filtro": filt}
 
-    # Normaliza mínimas
     for col, default in [
         ("idUsuario",    "DESCONOCIDO"),
         ("empresaNombre","EMPRESA_UNICA"),
@@ -558,7 +553,6 @@ def debug_peaje_after(
         if col not in df.columns:
             df[col] = default
 
-    # Importe numérico (siempre convertir)
     cand_imp = [c for c in df.columns if any(p in c.lower() for p in ["importe","total","precio","coste","amount","valor","pago"])]
     if cand_imp:
         col = cand_imp[0]
@@ -665,17 +659,14 @@ def ep_kpis_peaje(
     fields:     str|None = Query(None, description="Claves separadas por coma, p.ej.: gasto_mes_emp,emp_autopista_mes"),
 ):
     try:
-        # Filtro fechas
         filt = _build_filter_fechas_toll(start_date, end_date)
         if empresa:   filt["empresaNombre"] = empresa
         if idUsuario: filt["idUsuario"] = idUsuario
 
-        # Carga
         df = load_df_mongo(coll_toll, filt)
         if df.empty:
             return _filter_payload({"usuario": {}, "empresa": {}}, section, None)
 
-        # Normaliza columnas mínimas
         for col, default in [
             ("idUsuario",    "DESCONOCIDO"),
             ("empresaNombre","EMPRESA_UNICA"),
@@ -686,7 +677,6 @@ def ep_kpis_peaje(
             if col not in df.columns:
                 df[col] = default
 
-        # Importe numérico (SIEMPRE convertir, exista o no)
         cand_imp = [c for c in df.columns if any(p in c.lower() for p in ["importe","total","precio","coste","amount","valor","pago"])]
         if cand_imp:
             col = cand_imp[0]
@@ -699,14 +689,11 @@ def ep_kpis_peaje(
         else:
             df["importe"] = np.nan
 
-        # Tiempo
         df = add_time_cols_toll(df)
 
-        # Si sigue vacío (todo NaN), devolvemos vacío
         if df["importe"].isna().all():
             return _filter_payload({"usuario": {}, "empresa": {}}, section, None)
 
-        # KPIs
         usuario = kpis_usuario_toll(df)
         empresa_kpi = kpis_empresa_toll(df)
 
@@ -717,7 +704,6 @@ def ep_kpis_peaje(
         fields_list = [s.strip() for s in fields.split(",")] if fields else None
         return _filter_payload(payload, section, fields_list)
     except Exception as e:
-        # Devuelve error para depurar si algo se escapa
         return _filter_payload(
             {"usuario": {}, "empresa": {}, "error": str(e), "traceback": traceback.format_exc()},
             section, None
@@ -762,7 +748,6 @@ def _compute_payload(domain: str, start_date: str|None, end_date: str|None,
         if idUsuario: filt["idUsuario"] = idUsuario
         df = load_df_mongo(coll_toll, filt)
         if df.empty: return {"usuario": {}, "empresa": {}}
-        # Normalización mínima como en /kpis/peaje
         for col, default in [
             ("idUsuario","DESCONOCIDO"),("empresaNombre","EMPRESA_UNICA"),
             ("autopista","SIN_AUTOPISTA"),("formaPago","DESCONOCIDO"),("fechaHora",pd.NaT)
