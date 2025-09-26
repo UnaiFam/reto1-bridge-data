@@ -1,5 +1,5 @@
 # main.py
-from fastapi import FastAPI, Query
+from fastapi import FastAPI, Query, HTTPException
 from fastapi.middleware.cors import CORSMiddleware
 from pymongo import MongoClient
 import pandas as pd
@@ -8,6 +8,7 @@ import os, re, json, ast, traceback
 from datetime import datetime, timedelta
 from dotenv import load_dotenv
 from pathlib import Path
+from typing import Optional, List
 
 # ==============================
 # Cargar .env (del mismo dir que main.py) y configurar Mongo
@@ -17,9 +18,8 @@ load_dotenv(dotenv_path=Path(__file__).with_name(".env"))
 MONGO_URI = os.getenv("DB_URL")
 DB_NAME   = os.getenv("DB_NAME", "Prueba1")
 
-# ⚠️ Nombres de colecciones EXACTOS en tu Atlas
 COL_FUEL  = os.getenv("COL_FUEL", "Combustible")
-COL_EV    = os.getenv("COL_EV",   "electrico")   # tu colección real
+COL_EV    = os.getenv("COL_EV",   "electrico")   
 COL_TOLL  = os.getenv("COL_TOLL", "Peaje")
 
 client = MongoClient(MONGO_URI)
@@ -81,6 +81,25 @@ def _ser(d: dict):
     for k, v in d.items():
         out[k] = v.to_dict(orient="records") if isinstance(v, pd.DataFrame) else v
     return out
+
+def _filter_payload(payload: dict, section: Optional[str], fields: Optional[List[str]]) -> dict:
+    """
+    Filtra el JSON devuelto por los endpoints:
+      - section: "empresa" | "usuario" | None
+      - fields: lista de claves a incluir dentro de cada sección
+    """
+    if not payload:
+        return {}
+    # Limitar a una sección
+    if section in ("empresa", "usuario"):
+        payload = {section: payload.get(section, {})}
+    # Limitar a ciertas claves dentro de cada sección
+    if fields:
+        fset = set(fields)
+        for sec in list(payload.keys()):
+            sec_data = payload.get(sec) or {}
+            payload[sec] = {k: v for k, v in sec_data.items() if k in fset}
+    return payload
 
 # ==============================
 # Filtros Mongo por fechas
@@ -355,7 +374,6 @@ def kpis_usuario_toll(df: pd.DataFrame):
         else:
             dfu = dfu.reset_index().rename(columns={"index":"idTicket"})
             dfu["idTicket"] = dfu["idTicket"].astype(str)
-    # importe ya debe venir numérico desde el endpoint
     gasto_usuario_mes = dfu.groupby(["idUsuario","mes"])["importe"].sum().reset_index().rename(columns={"importe":"gasto_mes"})
     tickets_usuario_mes = dfu.groupby(["idUsuario","mes"])["idTicket"].nunique().reset_index().rename(columns={"idTicket":"tickets"})
     usuario_autopista_mes = (
@@ -525,7 +543,6 @@ def debug_peaje_after(
     if df.empty:
         return {"df_empty": True, "filtro": filt}
 
-    # Normaliza mínimas
     for col, default in [
         ("idUsuario",    "DESCONOCIDO"),
         ("empresaNombre","EMPRESA_UNICA"),
@@ -536,7 +553,6 @@ def debug_peaje_after(
         if col not in df.columns:
             df[col] = default
 
-    # Importe numérico (siempre convertir)
     cand_imp = [c for c in df.columns if any(p in c.lower() for p in ["importe","total","precio","coste","amount","valor","pago"])]
     if cand_imp:
         col = cand_imp[0]
@@ -563,7 +579,7 @@ def debug_peaje_after(
     }
 
 # ==============================
-# Endpoints KPIs
+# Endpoints KPIs (con selector de claves)
 # ==============================
 @app.get("/kpis/combustible")
 def ep_kpis_combustible(
@@ -571,6 +587,8 @@ def ep_kpis_combustible(
     end_date:   str|None = Query(None, description="YYYY-MM-DD (fechaEmision)"),
     empresa:    str|None = Query(None),
     idUsuario:  str|None = Query(None),
+    section:    str|None = Query(None, pattern="^(empresa|usuario)$"),
+    fields:     str|None = Query(None, description="Claves separadas por coma, p.ej.: gasto_mes_emp,precio_global_emp"),
 ):
     try:
         filt = _build_filter_fechas_cabecera(start_date, end_date)
@@ -578,18 +596,24 @@ def ep_kpis_combustible(
         if idUsuario: filt["idUsuario"] = idUsuario
 
         df = load_df_mongo(coll_fuel, filt)
-        if df.empty: return {"usuario": {}, "empresa": {}}
+        if df.empty:
+            return _filter_payload({"usuario": {}, "empresa": {}}, section, None)
 
         df = add_time_cols_fuel_ev(df)
         df["lineas_parsed"] = df.get("lineas", pd.Series([[]]*len(df))).apply(parse_lineas)
         df_lines = explode_fuel_lines(df)
-        if df_lines.empty: return {"usuario": {}, "empresa": {}}
+        if df_lines.empty:
+            return _filter_payload({"usuario": {}, "empresa": {}}, section, None)
 
-        return {"usuario": _ser(kpis_usuario_fuel(df, df_lines)),
-                "empresa": _ser(kpis_empresa_fuel(df, df_lines))}
+        payload = {
+            "usuario": _ser(kpis_usuario_fuel(df, df_lines)),
+            "empresa": _ser(kpis_empresa_fuel(df, df_lines)),
+        }
+        fields_list = [s.strip() for s in fields.split(",")] if fields else None
+        return _filter_payload(payload, section, fields_list)
     except Exception as e:
         print("ERROR /kpis/combustible:", repr(e))
-        return {"usuario": {}, "empresa": {}}
+        return _filter_payload({"usuario": {}, "empresa": {}}, section, None)
 
 @app.get("/kpis/ev")
 def ep_kpis_ev(
@@ -597,6 +621,8 @@ def ep_kpis_ev(
     end_date:   str|None = Query(None, description="YYYY-MM-DD (fechaEmision)"),
     empresa:    str|None = Query(None),
     idUsuario:  str|None = Query(None),
+    section:    str|None = Query(None, pattern="^(empresa|usuario)$"),
+    fields:     str|None = Query(None, description="Claves separadas por coma, p.ej.: kwh_mes_emp,precio_global_emp"),
 ):
     try:
         filt = _build_filter_fechas_cabecera(start_date, end_date)
@@ -604,18 +630,24 @@ def ep_kpis_ev(
         if idUsuario: filt["idUsuario"] = idUsuario
 
         df = load_df_mongo(coll_ev, filt)
-        if df.empty: return {"usuario": {}, "empresa": {}}
+        if df.empty:
+            return _filter_payload({"usuario": {}, "empresa": {}}, section, None)
 
         df = add_time_cols_fuel_ev(df)
         df["lineas_parsed"] = df.get("lineas", pd.Series([[]]*len(df))).apply(parse_lineas)
         df_lines = explode_ev_lines(df)
-        if df_lines.empty: return {"usuario": {}, "empresa": {}}
+        if df_lines.empty:
+            return _filter_payload({"usuario": {}, "empresa": {}}, section, None)
 
-        return {"usuario": _ser(kpis_usuario_ev(df, df_lines)),
-                "empresa": _ser(kpis_empresa_ev(df, df_lines))}
+        payload = {
+            "usuario": _ser(kpis_usuario_ev(df, df_lines)),
+            "empresa": _ser(kpis_empresa_ev(df, df_lines)),
+        }
+        fields_list = [s.strip() for s in fields.split(",")] if fields else None
+        return _filter_payload(payload, section, fields_list)
     except Exception as e:
         print("ERROR /kpis/ev:", repr(e))
-        return {"usuario": {}, "empresa": {}}
+        return _filter_payload({"usuario": {}, "empresa": {}}, section, None)
 
 @app.get("/kpis/peaje")
 def ep_kpis_peaje(
@@ -623,19 +655,18 @@ def ep_kpis_peaje(
     end_date:   str|None = Query(None, description="YYYY-MM-DD (fechaHora)"),
     empresa:    str|None = Query(None),
     idUsuario:  str|None = Query(None),
+    section:    str|None = Query(None, pattern="^(empresa|usuario)$"),
+    fields:     str|None = Query(None, description="Claves separadas por coma, p.ej.: gasto_mes_emp,emp_autopista_mes"),
 ):
     try:
-        # Filtro fechas
         filt = _build_filter_fechas_toll(start_date, end_date)
         if empresa:   filt["empresaNombre"] = empresa
         if idUsuario: filt["idUsuario"] = idUsuario
 
-        # Carga
         df = load_df_mongo(coll_toll, filt)
         if df.empty:
-            return {"usuario": {}, "empresa": {}}
+            return _filter_payload({"usuario": {}, "empresa": {}}, section, None)
 
-        # Normaliza columnas mínimas
         for col, default in [
             ("idUsuario",    "DESCONOCIDO"),
             ("empresaNombre","EMPRESA_UNICA"),
@@ -646,7 +677,6 @@ def ep_kpis_peaje(
             if col not in df.columns:
                 df[col] = default
 
-        # Importe numérico (SIEMPRE convertir, exista o no)
         cand_imp = [c for c in df.columns if any(p in c.lower() for p in ["importe","total","precio","coste","amount","valor","pago"])]
         if cand_imp:
             col = cand_imp[0]
@@ -659,30 +689,131 @@ def ep_kpis_peaje(
         else:
             df["importe"] = np.nan
 
-        # Tiempo
         df = add_time_cols_toll(df)
 
-        # Si sigue vacío (todo NaN), devolvemos vacío
         if df["importe"].isna().all():
-            return {"usuario": {}, "empresa": {}}
+            return _filter_payload({"usuario": {}, "empresa": {}}, section, None)
 
-        # KPIs
         usuario = kpis_usuario_toll(df)
         empresa_kpi = kpis_empresa_toll(df)
 
-        return {"usuario": _ser(usuario) if usuario else {}, "empresa": _ser(empresa_kpi) if empresa_kpi else {}}
+        payload = {
+            "usuario": _ser(usuario) if usuario else {},
+            "empresa": _ser(empresa_kpi) if empresa_kpi else {},
+        }
+        fields_list = [s.strip() for s in fields.split(",")] if fields else None
+        return _filter_payload(payload, section, fields_list)
     except Exception as e:
-        # Devuelve error para depurar si algo se escapa
-        return {"usuario": {}, "empresa": {}, "error": str(e), "traceback": traceback.format_exc()}
+        return _filter_payload(
+            {"usuario": {}, "empresa": {}, "error": str(e), "traceback": traceback.format_exc()},
+            section, None
+        )
 
+# ==============================
+# Aliases: "un endpoint por gráfica"
+# ==============================
+VALID_DOMAINS  = {"combustible", "ev", "peaje"}
+VALID_SECTIONS = {"empresa", "usuario"}
+
+def _compute_payload(domain: str, start_date: str|None, end_date: str|None,
+                     empresa: str|None, idUsuario: str|None) -> dict:
+    """Reutiliza la misma lógica que los /kpis/* para obtener el payload completo y luego filtrar."""
+    if domain == "combustible":
+        filt = _build_filter_fechas_cabecera(start_date, end_date)
+        if empresa:   filt["empresaNombre"] = empresa
+        if idUsuario: filt["idUsuario"] = idUsuario
+        df = load_df_mongo(coll_fuel, filt)
+        if df.empty: return {"usuario": {}, "empresa": {}}
+        df = add_time_cols_fuel_ev(df)
+        df["lineas_parsed"] = df.get("lineas", pd.Series([[]]*len(df))).apply(parse_lineas)
+        df_lines = explode_fuel_lines(df)
+        if df_lines.empty: return {"usuario": {}, "empresa": {}}
+        return {"usuario": _ser(kpis_usuario_fuel(df, df_lines)),
+                "empresa": _ser(kpis_empresa_fuel(df, df_lines))}
+    elif domain == "ev":
+        filt = _build_filter_fechas_cabecera(start_date, end_date)
+        if empresa:   filt["empresaNombre"] = empresa
+        if idUsuario: filt["idUsuario"] = idUsuario
+        df = load_df_mongo(coll_ev, filt)
+        if df.empty: return {"usuario": {}, "empresa": {}}
+        df = add_time_cols_fuel_ev(df)
+        df["lineas_parsed"] = df.get("lineas", pd.Series([[]]*len(df))).apply(parse_lineas)
+        df_lines = explode_ev_lines(df)
+        if df_lines.empty: return {"usuario": {}, "empresa": {}}
+        return {"usuario": _ser(kpis_usuario_ev(df, df_lines)),
+                "empresa": _ser(kpis_empresa_ev(df, df_lines))}
+    elif domain == "peaje":
+        filt = _build_filter_fechas_toll(start_date, end_date)
+        if empresa:   filt["empresaNombre"] = empresa
+        if idUsuario: filt["idUsuario"] = idUsuario
+        df = load_df_mongo(coll_toll, filt)
+        if df.empty: return {"usuario": {}, "empresa": {}}
+        for col, default in [
+            ("idUsuario","DESCONOCIDO"),("empresaNombre","EMPRESA_UNICA"),
+            ("autopista","SIN_AUTOPISTA"),("formaPago","DESCONOCIDO"),("fechaHora",pd.NaT)
+        ]:
+            if col not in df.columns: df[col] = default
+        cand_imp = [c for c in df.columns if any(p in c.lower() for p in ["importe","total","precio","coste","amount","valor","pago"])]
+        if cand_imp:
+            col = cand_imp[0]
+            num = pd.to_numeric(df[col], errors="coerce")
+            if num.isna().any():
+                parsed = df[col].apply(_to_num_eur)
+                num = num.where(num.notna(), parsed)
+            df["importe"] = num
+        else:
+            df["importe"] = np.nan
+        df = add_time_cols_toll(df)
+        if df["importe"].isna().all(): return {"usuario": {}, "empresa": {}}
+        return {"usuario": _ser(kpis_usuario_toll(df)),
+                "empresa": _ser(kpis_empresa_toll(df))}
+    else:
+        raise HTTPException(status_code=400, detail="domain inválido")
+
+@app.get("/charts/{domain}/{section}/{field}")
+def chart_endpoint(
+    domain: str,
+    section: str,
+    field: str,
+    start_date: str|None = Query(None, description="YYYY-MM-DD"),
+    end_date:   str|None = Query(None, description="YYYY-MM-DD"),
+    empresa:    str|None = Query(None),
+    idUsuario:  str|None = Query(None),
+):
+    """
+    Devuelve SOLO el dataset necesario para una gráfica concreta.
+    Ej.: /charts/combustible/empresa/gasto_mes_emp?empresa=ACME&start_date=2025-01-01&end_date=2025-12-31
+         /charts/ev/usuario/kwh_usuario_mes?idUsuario=U42
+         /charts/peaje/empresa/emp_autopista_mes?empresa=ACME
+    """
+    domain = domain.lower()
+    section = section.lower()
+    if domain not in VALID_DOMAINS:
+        raise HTTPException(status_code=400, detail=f"domain debe ser uno de {sorted(VALID_DOMAINS)}")
+    if section not in VALID_SECTIONS:
+        raise HTTPException(status_code=400, detail=f"section debe ser uno de {sorted(VALID_SECTIONS)}")
+
+    payload = _compute_payload(domain, start_date, end_date, empresa, idUsuario)
+    data = payload.get(section, {})
+    if field not in data:
+        return {
+            "error": f"field '{field}' no disponible para section '{section}' en '{domain}'",
+            "available_fields": sorted(list(data.keys()))
+        }
+    return {field: data[field]}
+
+# ==============================
+# Root
+# ==============================
 @app.get("/")
 def root():
     return {
-        "message": "API KPIs lista. Endpoints: /kpis/combustible, /kpis/ev, /kpis/peaje",
+        "message": "API KPIs lista. Endpoints: /kpis/combustible, /kpis/ev, /kpis/peaje | Aliases por gráfica: /charts/{domain}/{section}/{field}",
         "health": "/health",
         "debug_config": "/debug/config",
         "debug_peek": "/debug/peek",
         "debug_distinct": "/debug/distinct?collection=Peaje&field=idUsuario",
         "debug_peaje_sample": "/debug/peaje_sample",
-        "debug_peaje_after": "/debug/peaje_after"
+        "debug_peaje_after": "/debug/peaje_after",
+        "charts_example": "/charts/combustible/empresa/gasto_mes_emp?empresa=ACME&start_date=2025-01-01&end_date=2025-12-31"
     }
