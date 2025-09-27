@@ -96,10 +96,8 @@ def _filter_payload(payload: dict, section: Optional[str], fields: Optional[List
     """
     if not payload:
         return {}
-    # Limitar a una sección
     if section in ("empresa", "usuario"):
         payload = {section: payload.get(section, {})}
-    # Limitar a ciertas claves dentro de cada sección
     if fields:
         fset = set(fields)
         for sec in list(payload.keys()):
@@ -332,7 +330,6 @@ def kpis_empresa_fuel(df_tickets: pd.DataFrame, df_lines: pd.DataFrame):
     if df_tickets.empty or df_lines.empty:
         return {}
 
-    # Totales y agregados a nivel empresa
     gasto_mes_emp = (
         df_tickets.groupby(["empresaNombre","mes"])["total"]
         .sum().reset_index()
@@ -375,8 +372,6 @@ def kpis_empresa_fuel(df_tickets: pd.DataFrame, df_lines: pd.DataFrame):
         .reset_index(name="eur_l")
         .rename(columns={"empresaTransporte":"empresa"})
     )
-
-    # Desglose por usuario dentro de la empresa (por mes)
     gasto_emp_user_mes = (
         df_tickets.groupby(["empresaNombre","idUsuario","mes"])["total"]
         .sum().reset_index()
@@ -409,12 +404,10 @@ def kpis_empresa_fuel(df_tickets: pd.DataFrame, df_lines: pd.DataFrame):
         "litros_mes_emp": litros_mes_emp,
         "litros_veh_emp": litros_veh_emp,
         "precio_global_emp": precio_global_emp,
-        # Nuevos datasets (comparativa por usuario)
         "gasto_emp_user_mes": gasto_emp_user_mes,
         "tickets_emp_user_mes": tickets_emp_user_mes,
         "litros_emp_user_mes": litros_emp_user_mes,
         "precio_emp_user": precio_emp_user,
-        # Alias unificado consumo (combustible = litros)
         "consumo_emp_user_mes": litros_emp_user_mes,
     }
 
@@ -504,8 +497,6 @@ def kpis_empresa_ev(df_tickets: pd.DataFrame, df_lines: pd.DataFrame):
         .apply(lambda x: (x["precio_kwh"].mul(x["w"]).sum())/x["w"].sum())
         .reset_index(name="eur_kwh").rename(columns={"empresaTransporte":"empresa"})
     )
-
-    # Desglose por usuario dentro de la empresa (por mes)
     gasto_emp_user_mes = (
         df_tickets.groupby(["empresaNombre","idUsuario","mes"])["total"]
         .sum().reset_index().rename(columns={"empresaNombre":"empresa"})
@@ -534,12 +525,10 @@ def kpis_empresa_ev(df_tickets: pd.DataFrame, df_lines: pd.DataFrame):
         "kwh_mes_emp": kwh_mes_emp,
         "kwh_veh_emp": kwh_veh_emp,
         "precio_global_emp": precio_global_emp,
-        # Nuevos datasets
         "gasto_emp_user_mes": gasto_emp_user_mes,
         "tickets_emp_user_mes": tickets_emp_user_mes,
         "kwh_emp_user_mes": kwh_emp_user_mes,
         "precio_emp_user": precio_emp_user,
-        # Alias unificado consumo (EV = kWh)
         "consumo_emp_user_mes": kwh_emp_user_mes,
     }
 
@@ -645,8 +634,6 @@ def kpis_empresa_toll(df: pd.DataFrame):
         dfe.groupby("empresa")["is_weekend"].mean().mul(100)
         .reset_index().rename(columns={"is_weekend":"pct_finde"})
     )
-
-    # Desglose por usuario dentro de la empresa (por mes)
     gasto_emp_user_mes = (
         dfe.groupby(["empresa","idUsuario","mes"])["importe"]
         .sum().reset_index().rename(columns={"importe":"gasto_mes"})
