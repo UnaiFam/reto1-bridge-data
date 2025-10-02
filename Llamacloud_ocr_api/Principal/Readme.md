@@ -96,12 +96,7 @@ obliga a un contenido minimo muchos no lo soportan como debieran.
 
 
 
-API-key: llx-80200pQgQeS1QWleqJHsDUjIBFf4QCbQIOyqyPJbo6KnGNRq
-nombre: LEER FACTURAS 1
-id: 882591e8-1c77-4ae7-a494-77ce1a30d4ce
 
-nombre: Facturas Peaje
-id: a0a10b83-97b4-4024-b9ff-e09b2f0a64e6
 
 
 # Tipos de archivos que soporta 
@@ -113,6 +108,7 @@ Images: PNG (.png), JPEG (.jpg, .jpeg).
 
 el codigo recogido en este repositorio, recoge la forma que tendria un fastapi con la información, en el punto de entrada del archivo 
 se puede meter cualquier formato que se quiera, la aplicacion lo transformara el bytes y despues lo enviará a llamacloud para procesar. 
+
 
 
 
